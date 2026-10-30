@@ -102,6 +102,9 @@ h1{font-family:var(--f-display);font-weight:800;font-size:1.9rem;letter-spacing:
 .tform .full{grid-column:1/-1}
 .tform .row{grid-column:1/-1;display:flex;gap:8px}
 .tform .msg{grid-column:1/-1;font-size:.85rem;color:var(--late);margin:0}
+.pastbar{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin:0 0 14px}
+.pastbar .link{font-size:.9rem}
+.day.pastdone{opacity:.78}
 .kid .v{font-size:.78rem;color:var(--test);font-weight:700}
 @media (max-width:420px){h1{font-size:1.6rem}.kid{padding:8px}.kid .n{font-size:1rem}}
 @media (prefers-reduced-motion:no-preference){.item{transition:background .2s,border-color .2s}}
@@ -131,10 +134,10 @@ h1{font-family:var(--f-display);font-weight:800;font-size:1.9rem;letter-spacing:
       <datalist id="materie"></datalist>
     </form>
   </section>
+  <div class="pastbar"><button class="link" id="pastBtn" type="button">↑ Mostra giorni precedenti</button><button class="link" id="pastHide" type="button" hidden>Nascondi giorni passati</button></div>
   <main id="main"><p class="note">Caricamento dei compiti…</p></main>
 
   <div class="foot">
-    <button class="link" id="togglePast" type="button">Mostra anche i giorni passati già completati</button>
     <span>I compiti arrivano da Nuvola più volte al giorno. Le spunte restano anche quando i compiti vengono aggiornati.</span>
   </div>
 </div>
@@ -143,7 +146,7 @@ h1{font-family:var(--f-display);font-weight:800;font-size:1.9rem;letter-spacing:
 const SB_URL="https://ukjpemlqushmuakswoww.supabase.co";
 const SB_KEY="sb_publishable_zqMoAof9UjILkFp2TlDPtQ_-1BfpDjN";
 const COLORS=["var(--k1)","var(--k2)","var(--k3)","var(--accent)"];
-const state={kids:[],tasks:[],tests:[],meta:{},kid:null,showPast:false,code:null};
+const state={kids:[],tasks:[],older:[],tests:[],meta:{},kid:null,pastDays:0,oldest:null,code:null};
 const $=s=>document.querySelector(s);
 
 function getCode(){
@@ -233,8 +236,11 @@ function render(){
   renderTests(kid);
   const main=$("#main");
   main.style.setProperty("--kc",kid.color);
-  const mine=state.tasks.filter(x=>x.figlio===kid.id);
-  const today=todayISO(), tom=nextSchoolDay(today);
+  const today=todayISO();
+  const ids=new Set(state.tasks.map(x=>x.id));
+  const mine=state.tasks.concat(state.older.filter(x=>!ids.has(x.id))).filter(x=>x.figlio===kid.id);
+  const limite=addDays(today,-state.pastDays);
+  const tom=nextSchoolDay(today);
   const byDay=new Map();
   for(const t of mine){if(!byDay.has(t.data))byDay.set(t.data,[]);byDay.get(t.data).push(t)}
   const days=[...byDay.keys()].sort();
@@ -243,10 +249,10 @@ function render(){
   for(const d of days){
     const items=byDay.get(d).sort((a,b)=>a.materia.localeCompare(b.materia));
     const past=d<=today, allDone=items.every(x=>x.fatto);
-    if(past&&allDone&&!state.showPast)continue;
+    if(past&&allDone&&(state.pastDays===0||d<limite))continue;
     shown++;
-    const sec=document.createElement("section");
-    sec.className="day"+(past&&!allDone?" late":"")+(d===tom?" tomorrow":"");
+    const sec=document.createElement("section");sec.id="d-"+d;
+    sec.className="day"+(past&&!allDone?" late":"")+(past&&allDone?" pastdone":"")+(d===tom?" tomorrow":"");
     const head=document.createElement("div");head.className="dayhead";
     const h2=document.createElement("h2");h2.textContent=fmtDay(d);
     const tag=document.createElement("span");tag.className="tag";
@@ -273,7 +279,10 @@ function render(){
     sec.appendChild(ul);main.appendChild(sec);
   }
   if(!shown){const e=document.createElement("p");e.className="empty";e.textContent=kid.nome+" non ha compiti da fare. Tutto in ordine.";main.appendChild(e)}
-  $("#togglePast").textContent=state.showPast?"Nascondi i giorni passati già completati":"Mostra anche i giorni passati già completati";
+  $("#pastHide").hidden=state.pastDays===0;
+  const fine=state.oldest&&addDays(today,-state.pastDays)<=state.oldest;
+  $("#pastBtn").hidden=!!fine&&state.pastDays>0;
+  $("#pastBtn").textContent=state.pastDays===0?"↑ Mostra giorni precedenti":"↑ Ancora una settimana prima";
 }
 function renderSync(){
   const s=$("#sync");s.textContent="";
@@ -343,7 +352,30 @@ async function toggle(t,cb){
   catch(e){t.fatto=!val;render();showErr("La spunta non è stata salvata. Riprova quando sei connesso.")}
 }
 
-$("#togglePast").addEventListener("click",()=>{state.showPast=!state.showPast;render()});
+function conAncora(fn){
+  const a=document.querySelector("#main .day:not(.pastdone)");
+  const top=a?a.getBoundingClientRect().top:null;
+  fn();
+  if(a&&a.isConnected===false){const b=document.getElementById(a.id);if(b)window.scrollBy(0,b.getBoundingClientRect().top-top)}
+  else if(a)window.scrollBy(0,a.getBoundingClientRect().top-top);
+}
+$("#pastBtn").addEventListener("click",async()=>{
+  const btn=$("#pastBtn");btn.disabled=true;
+  const today=todayISO(), nuovi=state.pastDays+7;
+  try{
+    if(nuovi>7){
+      const d=await rpc("storico",{codice:state.code,dal:addDays(today,-nuovi),al:addDays(today,-(state.pastDays+1))});
+      const have=new Set(state.older.map(x=>x.id));
+      state.older.push(...(d.compiti||[]).filter(x=>!have.has(x.id)));
+      state.oldest=d.piu_vecchio||state.oldest;
+    }else if(!state.oldest){
+      const d=await rpc("storico",{codice:state.code,dal:today,al:today});state.oldest=d.piu_vecchio;
+    }
+    conAncora(()=>{state.pastDays=nuovi;render()});
+  }catch(e){showErr("Non riesco a caricare i giorni precedenti. Riprova.")}
+  finally{btn.disabled=false}
+});
+$("#pastHide").addEventListener("click",()=>conAncora(()=>{state.pastDays=0;render()}));
 state.code=getCode();
 try{state.kid=localStorage.getItem("kid")}catch(e){}
 if(location.hash.includes("k="))history.replaceState(null,"",location.pathname+location.search);
