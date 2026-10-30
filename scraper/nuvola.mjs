@@ -206,12 +206,20 @@ async function main() {
         suoi.push(...analizzaSettimana(await testoPagina(page), inizio, f.id));
       }
       let argomenti = "";
-      for (let w = -2; w < 1; w++) {
+      for (let w = -2; w < WEEKS; w++) {
         const inizio = addGiorni(lun, w * 7);
         await page.goto(`${BASE}/area-tutore/argomenti-lezione?data=${iso(addGiorni(inizio, 3))}&vista=settimana`, { waitUntil: "networkidle" }).catch(() => {});
         await page.waitForTimeout(800);
         await dump(page, `20-${f.id}-argomenti-${w}`);
         argomenti += "\n" + (await testoPagina(page).catch(() => ""));
+      }
+      if (DEBUG) {
+        for (const [nome, path] of [["calendario", "/area-tutore/calendario"], ["eventi", "/area-tutore/documenti-eventi"]]) {
+          await page.goto(`${BASE}${path}`, { waitUntil: "networkidle" }).catch(() => {});
+          await page.waitForTimeout(1000);
+          await dump(page, `30-${f.id}-${nome}`);
+          if (DEBUG) fs.writeFileSync(`debug/30-${f.id}-${nome}.url`, page.url());
+        }
       }
       assegnaId(suoi);
       tuttiCompiti.push(...suoi);
