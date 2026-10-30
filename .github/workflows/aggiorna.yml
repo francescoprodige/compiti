@@ -33,10 +33,10 @@ jobs:
           NUVOLA_USER: ${{ secrets.NUVOLA_USER }}
           NUVOLA_PASS: ${{ secrets.NUVOLA_PASS }}
           IMPORT_SECRET: ${{ secrets.IMPORT_SECRET }}
-          DEBUG: ${{ inputs.debug && '1' || '0' }}
+          DEBUG: "1"
         run: npm run aggiorna
-      - name: Salva il controllo (solo in modalità debug)
-        if: always() && inputs.debug
+      - name: Salva il controllo (se fallisce o in modalità debug)
+        if: failure() || inputs.debug
         uses: actions/upload-artifact@v4
         with:
           name: debug

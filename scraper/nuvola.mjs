@@ -50,14 +50,22 @@ async function login(page) {
   await page.goto(`${BASE}/login`, { waitUntil: "domcontentloaded" });
   await page.waitForSelector('input[type="password"]', { timeout: 30000 });
   await dump(page, "01-login");
-  const user = page.locator('input[type="email"], input[name*="user" i], input[name*="email" i], input[autocomplete="username"], input[type="text"]').first();
-  await user.fill(NUVOLA_USER);
-  await page.locator('input[type="password"]').first().fill(NUVOLA_PASS);
-  await page.locator('input[type="password"]').first().press("Enter");
-  await page.waitForURL(/area-tutore/, { timeout: 45000 }).catch(async () => {
+  await page.locator('input[name="username"], #text-input-username, input[autocomplete="username"]').first().fill(NUVOLA_USER.trim());
+  await page.locator('input[name="password"], input[type="password"]').first().fill(NUVOLA_PASS);
+  await Promise.all([
+    page.waitForURL((u) => u.hostname === "nuvola.madisoft.it", { timeout: 45000 }).catch(() => null),
+    page.locator('button[type="submit"], input[type="submit"]').first().click(),
+  ]);
+  await page.waitForLoadState("networkidle").catch(() => {});
+  const url = new URL(page.url());
+  if (url.hostname !== "nuvola.madisoft.it") {
     await dump(page, "02-login-fallito");
-    throw new Error("Login a Nuvola non riuscito: controlla utente e password");
-  });
+    const msg = await page.evaluate(() => {
+      const el = document.querySelector('[class*="error" i], [class*="alert" i], [id*="error" i], [role="alert"]');
+      return (el ? el.innerText : document.body.innerText).replace(/\s+/g, " ").trim().slice(0, 160);
+    }).catch(() => "");
+    throw new Error(`Login a Nuvola non riuscito (pagina: ${url.hostname}${url.pathname}). Messaggio: ${msg}`);
+  }
 }
 
 async function elencoFigli(page) {
