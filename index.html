@@ -1,0 +1,295 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Compiti">
+<meta name="theme-color" content="#2f5bd3">
+<title>Compiti di casa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap">
+<style>
+/* Layout: diario a una colonna — testata, schede per figlio, giorni come pagine del diario */
+:root{
+  --bg:#eef1f4; --paper:#ffffff; --ink:#1d2430; --muted:#5d6878; --line:#d8dee6;
+  --accent:#2f5bd3; --late:#c2410c; --late-bg:#fff1e8; --ok:#15803d; --ok-bg:#e9f7ee;
+  --k1:#2f5bd3; --k2:#b4318a; --k3:#0f8a7a; --test:#b42318; --test-bg:#fff4f2;
+  --f-display:"Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --f-body:"Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#12161d; --paper:#1b212b; --ink:#e7ebf2; --muted:#9aa5b5; --line:#2c3442;
+  --accent:#7d9ff5; --late:#fb923c; --late-bg:#33221a; --ok:#4ade80; --ok-bg:#16291e;
+  --k1:#7d9ff5; --k2:#ee7cc6; --k3:#4fd1bf; --test:#ff8a7a; --test-bg:#2d1a1a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#12161d; --paper:#1b212b; --ink:#e7ebf2; --muted:#9aa5b5; --line:#2c3442;
+  --accent:#7d9ff5; --late:#fb923c; --late-bg:#33221a; --ok:#4ade80; --ok-bg:#16291e;
+  --k1:#7d9ff5; --k2:#ee7cc6; --k3:#4fd1bf; --test:#ff8a7a; --test-bg:#2d1a1a; color-scheme:dark}
+*{box-sizing:border-box}
+html{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.45}
+.wrap{max-width:720px;margin:0 auto;padding-block:20px 48px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header{display:flex;flex-direction:column;gap:4px;margin-bottom:16px}
+h1{font-family:var(--f-display);font-weight:800;font-size:1.9rem;letter-spacing:-.01em;margin:0;text-wrap:balance}
+.sync{color:var(--muted);font-size:.9rem;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--ok);flex:none}
+.dot.stale{background:var(--late)}
+.kids{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:20px}
+.kid{appearance:none;border:2px solid var(--line);background:var(--paper);color:var(--ink);border-radius:12px;
+  padding:10px 10px 9px;text-align:left;cursor:pointer;font:inherit;display:flex;flex-direction:column;gap:2px;min-width:0}
+.kid:focus-visible,.chk:focus-visible,.link:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.kid .n{font-family:var(--f-display);font-weight:800;font-size:1.15rem;line-height:1.1}
+.kid .c{font-size:.8rem;color:var(--muted);letter-spacing:.02em}
+.kid .t{font-size:.85rem;font-variant-numeric:tabular-nums;margin-top:4px}
+.kid .t b{color:var(--kc)}
+.kid .t.zero b{color:var(--ok)}
+.kid[aria-selected="true"]{border-color:var(--kc);box-shadow:inset 0 -4px 0 var(--kc)}
+.day{margin-bottom:18px}
+.dayhead{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px;padding:0 2px 6px;border-bottom:2px solid var(--ink);margin-bottom:8px}
+.dayhead h2{font-family:var(--f-display);font-weight:600;font-size:1.1rem;margin:0;text-transform:capitalize}
+.dayhead .tag{font-size:.75rem;text-transform:uppercase;letter-spacing:.08em;font-weight:700;color:var(--muted)}
+.day.late .dayhead{border-color:var(--late)} .day.late .dayhead .tag{color:var(--late)}
+.day.tomorrow .dayhead .tag{color:var(--accent)}
+.list{display:flex;flex-direction:column;gap:6px;list-style:none;margin:0;padding:0}
+.item{display:grid;grid-template-columns:auto 1fr;gap:12px;align-items:start;background:var(--paper);
+  border:1px solid var(--line);border-radius:10px;padding:12px}
+.day.late .item:not(.done){background:var(--late-bg);border-color:transparent}
+.chk{appearance:none;width:30px;height:30px;border:2px solid var(--muted);border-radius:8px;margin:0;cursor:pointer;
+  display:grid;place-content:center;background:var(--paper);flex:none}
+.chk::after{content:"";width:12px;height:7px;border-left:3px solid var(--paper);border-bottom:3px solid var(--paper);transform:rotate(-45deg) translate(1px,-1px);opacity:0}
+.chk:checked{background:var(--ok);border-color:var(--ok)} .chk:checked::after{opacity:1}
+.chk:disabled{cursor:not-allowed;opacity:.6}
+.body{min-width:0}
+.mat{font-size:.78rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--kc)}
+.txt{margin:2px 0 4px;white-space:pre-line;overflow-wrap:anywhere}
+.meta{font-size:.8rem;color:var(--muted)}
+.item.done .txt{text-decoration:line-through;text-decoration-thickness:1px;color:var(--muted)}
+.item.done .when{color:var(--ok);font-weight:700}
+.empty{background:var(--ok-bg);color:var(--ok);border-radius:10px;padding:12px;font-weight:700}
+.note{background:var(--paper);border:1px dashed var(--line);border-radius:10px;padding:14px;color:var(--muted)}
+.foot{margin-top:24px;display:flex;flex-direction:column;gap:6px;font-size:.85rem;color:var(--muted)}
+.link{appearance:none;background:none;border:0;padding:0;color:var(--accent);font:inherit;text-decoration:underline;cursor:pointer;align-self:flex-start}
+.ro{font-size:.85rem;color:var(--late);margin:-8px 0 14px}
+.tests{background:var(--test-bg);border:2px solid var(--test);border-radius:12px;padding:12px 14px;margin-bottom:22px}
+.tests h2{font-family:var(--f-display);font-weight:800;font-size:1rem;margin:0 0 8px;color:var(--test);display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.tests h2 small{font-family:var(--f-body);font-weight:400;font-size:.8rem;color:var(--muted)}
+.tlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.trow{display:grid;grid-template-columns:4.2rem 1fr;gap:10px;align-items:start}
+.tdate{background:var(--test);color:var(--paper);border-radius:8px;text-align:center;padding:4px 2px;line-height:1.1;font-variant-numeric:tabular-nums}
+.tdate b{display:block;font-family:var(--f-display);font-size:1.25rem}
+.tdate span{font-size:.72rem;text-transform:uppercase;letter-spacing:.06em}
+.tbody{min-width:0}
+.tbody .tm{font-weight:700}
+.tbody .td{font-size:.88rem;overflow-wrap:anywhere}
+.pill{display:inline-block;font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;border-radius:999px;padding:1px 8px;margin-left:6px;vertical-align:1px}
+.pill.tbd{border:1px dashed var(--muted);color:var(--muted)}
+.pill.today{background:var(--test);color:var(--paper)}
+.tnone{font-size:.9rem;color:var(--muted);margin:0}
+.dayhead .tp{color:var(--test);font-weight:700;font-size:.75rem;text-transform:uppercase;letter-spacing:.08em}
+.kid .v{font-size:.78rem;color:var(--test);font-weight:700}
+@media (max-width:420px){h1{font-size:1.6rem}.kid{padding:8px}.kid .n{font-size:1rem}}
+@media (prefers-reduced-motion:no-preference){.item{transition:background .2s,border-color .2s}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Compiti di casa</h1>
+    <div class="sync" id="sync"><span class="dot stale"></span><span>Caricamento…</span></div>
+  </header>
+
+  <div class="kids" role="tablist" id="kids"></div>
+  <p class="ro" id="err" hidden></p>
+
+  <section class="tests" id="tests" aria-labelledby="tests-h" hidden>
+    <h2 id="tests-h"><span>Verifiche e interrogazioni</span><small>prossime 2 settimane</small></h2>
+    <ul class="tlist" id="tlist"></ul>
+  </section>
+  <main id="main"><p class="note">Caricamento dei compiti…</p></main>
+
+  <div class="foot">
+    <button class="link" id="togglePast" type="button">Mostra anche i giorni passati già completati</button>
+    <span>I compiti arrivano da Nuvola più volte al giorno. Le spunte restano anche quando i compiti vengono aggiornati.</span>
+  </div>
+</div>
+
+<script>
+const SB_URL="https://ukjpemlqushmuakswoww.supabase.co";
+const SB_KEY="sb_publishable_zqMoAof9UjILkFp2TlDPtQ_-1BfpDjN";
+const COLORS=["var(--k1)","var(--k2)","var(--k3)","var(--accent)"];
+const state={kids:[],tasks:[],tests:[],meta:{},kid:null,showPast:false,code:null};
+const $=s=>document.querySelector(s);
+
+function getCode(){
+  const m=location.hash.match(/k=([A-Za-z0-9_-]+)/);
+  if(m){try{localStorage.setItem("codice",m[1])}catch(e){}return m[1]}
+  try{return localStorage.getItem("codice")}catch(e){return null}
+}
+async function rpc(fn,args){
+  const r=await fetch(SB_URL+"/rest/v1/rpc/"+fn,{method:"POST",headers:{"apikey":SB_KEY,"Content-Type":"application/json"},body:JSON.stringify(args)});
+  if(!r.ok){const t=await r.text();const e=new Error(t);e.status=r.status;throw e}
+  const t=await r.text();return t?JSON.parse(t):null;
+}
+
+function todayISO(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
+function addDays(iso,n){const d=new Date(iso+"T12:00:00");d.setDate(d.getDate()+n);return d.toISOString().slice(0,10)}
+function nextSchoolDay(iso){let d=addDays(iso,1);while(new Date(d+"T12:00:00").getDay()===0)d=addDays(d,1);return d}
+const fmtDay=iso=>new Date(iso+"T12:00:00").toLocaleDateString("it-IT",{weekday:"long",day:"numeric",month:"short"});
+const fmtShort=iso=>new Date(iso+"T12:00:00").toLocaleDateString("it-IT",{weekday:"short",day:"numeric",month:"short"});
+const fmtStamp=ts=>new Date(ts).toLocaleString("it-IT",{weekday:"short",day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"});
+
+function setKid(id){
+  state.kid=id;
+  try{localStorage.setItem("kid",id)}catch(e){}
+  render();
+}
+function upcomingTests(kidId){
+  const t=todayISO(),end=addDays(t,14);
+  return state.tests.filter(x=>x.figlio===kidId&&x.data>=t&&x.data<=end).sort((a,b)=>a.data.localeCompare(b.data)||a.materia.localeCompare(b.materia));
+}
+function openCount(kidId){return state.tasks.filter(x=>x.figlio===kidId&&!x.fatto).length}
+
+function renderKids(){
+  const box=$("#kids");box.textContent="";
+  const tom=nextSchoolDay(todayISO());
+  for(const k of state.kids){
+    const b=document.createElement("button");
+    b.className="kid";b.type="button";b.setAttribute("role","tab");
+    b.setAttribute("aria-selected",String(k.id===state.kid));b.style.setProperty("--kc",k.color);
+    const domani=state.tasks.filter(x=>x.figlio===k.id&&x.data===tom&&!x.fatto).length;
+    const tot=openCount(k.id);
+    b.innerHTML='<span class="n"></span><span class="c"></span><span class="t"></span>';
+    b.querySelector(".n").textContent=k.nome;
+    b.querySelector(".c").textContent=k.classe||"";
+    const t=b.querySelector(".t");
+    if(tot===0){t.classList.add("zero");t.innerHTML="<b>Tutto fatto</b>"}
+    else{t.innerHTML="<b></b> da fare"+(domani?" · <span></span> per domani":"");
+      t.querySelector("b").textContent=tot; if(domani)t.querySelector("span").textContent=domani;}
+    const nv=upcomingTests(k.id).length;
+    if(nv){const v=document.createElement("span");v.className="v";v.textContent=nv===1?"1 verifica in arrivo":nv+" verifiche in arrivo";b.appendChild(v)}
+    b.addEventListener("click",()=>setKid(k.id));
+    box.appendChild(b);
+  }
+}
+function renderTests(kid){
+  const box=$("#tests"),ul=$("#tlist");
+  box.hidden=false;ul.textContent="";
+  const list=upcomingTests(kid.id), today=todayISO();
+  if(!list.length){const p=document.createElement("p");p.className="tnone";p.textContent="Nessuna verifica o interrogazione segnata per "+kid.nome+".";ul.appendChild(p);return}
+  for(const v of list){
+    const li=document.createElement("li");li.className="trow";
+    const d=new Date(v.data+"T12:00:00");
+    const dt=document.createElement("div");dt.className="tdate";
+    const dd=document.createElement("b");dd.textContent=d.getDate();
+    const ds=document.createElement("span");ds.textContent=d.toLocaleDateString("it-IT",{weekday:"short"})+" "+d.toLocaleDateString("it-IT",{month:"short"});
+    dt.append(dd,ds);
+    const b=document.createElement("div");b.className="tbody";
+    const m=document.createElement("div");m.className="tm";m.textContent=v.materia+" · "+v.tipo;
+    if(v.data===today){const p=document.createElement("span");p.className="pill today";p.textContent="Oggi";m.appendChild(p)}
+    if(v.stato!=="confermata"){const p=document.createElement("span");p.className="pill tbd";p.textContent="Da confermare";m.appendChild(p)}
+    b.appendChild(m);
+    if(v.descrizione){const x=document.createElement("div");x.className="td";x.textContent=v.descrizione;b.appendChild(x)}
+    li.append(dt,b);ul.appendChild(li);
+  }
+}
+function render(){
+  if(!state.kids.length)return;
+  if(!state.kids.some(k=>k.id===state.kid))state.kid=state.kids[0].id;
+  renderKids();
+  const kid=state.kids.find(k=>k.id===state.kid);
+  renderTests(kid);
+  const main=$("#main");
+  main.style.setProperty("--kc",kid.color);
+  const mine=state.tasks.filter(x=>x.figlio===kid.id);
+  const today=todayISO(), tom=nextSchoolDay(today);
+  const byDay=new Map();
+  for(const t of mine){if(!byDay.has(t.data))byDay.set(t.data,[]);byDay.get(t.data).push(t)}
+  const days=[...byDay.keys()].sort();
+  main.textContent="";
+  let shown=0;
+  for(const d of days){
+    const items=byDay.get(d).sort((a,b)=>a.materia.localeCompare(b.materia));
+    const past=d<=today, allDone=items.every(x=>x.fatto);
+    if(past&&allDone&&!state.showPast)continue;
+    shown++;
+    const sec=document.createElement("section");
+    sec.className="day"+(past&&!allDone?" late":"")+(d===tom?" tomorrow":"");
+    const head=document.createElement("div");head.className="dayhead";
+    const h2=document.createElement("h2");h2.textContent=fmtDay(d);
+    const tag=document.createElement("span");tag.className="tag";
+    tag.textContent=past&&!allDone?"Arretrato":d===tom?"Per domani":allDone?"Completato":items.filter(x=>!x.fatto).length+" da fare";
+    head.append(h2);
+    const vt=state.tests.filter(x=>x.figlio===kid.id&&x.data===d);
+    if(vt.length){const p=document.createElement("span");p.className="tp";p.textContent=vt.map(x=>x.tipo+" "+x.materia.toLowerCase()).join(", ");head.append(p)}
+    head.append(tag);sec.appendChild(head);
+    const ul=document.createElement("ul");ul.className="list";
+    for(const t of items){
+      const li=document.createElement("li");li.className="item"+(t.fatto?" done":"");
+      const cb=document.createElement("input");cb.type="checkbox";cb.className="chk";cb.id="c-"+t.id;
+      cb.checked=!!t.fatto;
+      cb.setAttribute("aria-label",(t.fatto?"Segna da fare: ":"Segna fatto: ")+t.materia);
+      cb.addEventListener("change",()=>toggle(t,cb));
+      const body=document.createElement("div");body.className="body";
+      const m=document.createElement("div");m.className="mat";m.textContent=t.materia;
+      const p=document.createElement("p");p.className="txt";p.textContent=t.testo;
+      const meta=document.createElement("div");meta.className="meta";
+      meta.textContent=(t.assegnato?"Assegnato "+fmtShort(t.assegnato):"")+(t.docente?" · "+t.docente:"");
+      if(t.fatto&&t.fatto_il){const w=document.createElement("span");w.className="when";w.textContent=" · Fatto "+fmtStamp(t.fatto_il);meta.appendChild(w)}
+      body.append(m,p,meta);li.append(cb,body);ul.appendChild(li);
+    }
+    sec.appendChild(ul);main.appendChild(sec);
+  }
+  if(!shown){const e=document.createElement("p");e.className="empty";e.textContent=kid.nome+" non ha compiti da fare. Tutto in ordine.";main.appendChild(e)}
+  $("#togglePast").textContent=state.showPast?"Nascondi i giorni passati già completati":"Mostra anche i giorni passati già completati";
+}
+function renderSync(){
+  const s=$("#sync");s.textContent="";
+  const dot=document.createElement("span");dot.className="dot";
+  const txt=document.createElement("span");
+  const agg=state.meta.aggiornato, err=state.meta.errore;
+  if(agg){
+    const age=(Date.now()-new Date(agg))/36e5;
+    if(age>26||err)dot.classList.add("stale");
+    txt.textContent="Aggiornato da Nuvola "+fmtStamp(agg)+(err?" — ultimo tentativo non riuscito":age>26?" — dati non recenti":"");
+  }else{dot.classList.add("stale");txt.textContent="In attesa del primo aggiornamento da Nuvola"}
+  s.append(dot,txt);
+}
+function showErr(msg){const e=$("#err");e.textContent=msg;e.hidden=!msg}
+
+async function load(){
+  if(!state.code){$("#main").innerHTML='<p class="note">Apri l’app dal link di famiglia: contiene il codice di accesso.</p>';$("#sync").textContent="";return}
+  try{
+    const d=await rpc("leggi",{codice:state.code});
+    state.tasks=d.compiti||[];state.tests=d.verifiche||[];state.meta=d.meta||{};
+    const fig=Array.isArray(state.meta.figli)?state.meta.figli:[...new Set(state.tasks.map(t=>t.figlio))].map(id=>({id,nome:id[0].toUpperCase()+id.slice(1)}));
+    state.kids=fig.map((k,i)=>({...k,color:COLORS[i%COLORS.length]}));
+    showErr("");renderSync();render();
+  }catch(e){
+    if(e.status===400||e.status===401||e.status===403){
+      try{localStorage.removeItem("codice")}catch(_){}
+      $("#main").innerHTML='<p class="note">Il codice di accesso non è valido. Riapri l’app dal link di famiglia.</p>';
+    }else showErr("Non riesco a collegarmi. Controlla la connessione: riprovo da solo tra poco.");
+  }
+}
+async function toggle(t,cb){
+  const val=cb.checked;
+  t.fatto=val;t.fatto_il=val?new Date().toISOString():null;render();
+  try{await rpc("segna",{codice:state.code,compito:t.id,valore:val})}
+  catch(e){t.fatto=!val;render();showErr("La spunta non è stata salvata. Riprova quando sei connesso.")}
+}
+
+$("#togglePast").addEventListener("click",()=>{state.showPast=!state.showPast;render()});
+state.code=getCode();
+try{state.kid=localStorage.getItem("kid")}catch(e){}
+if(location.hash.includes("k="))history.replaceState(null,"",location.pathname+location.search);
+load();
+setInterval(()=>{if(document.visibilityState==="visible")load()},60000);
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")load()});
+</script>
+
+</body>
+</html>

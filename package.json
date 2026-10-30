@@ -1,0 +1,7 @@
+{
+  "name": "compiti-nuvola",
+  "private": true,
+  "type": "module",
+  "scripts": { "aggiorna": "node scraper/nuvola.mjs" },
+  "dependencies": { "playwright": "1.48.2" }
+}

@@ -1,0 +1,52 @@
+name: Aggiorna compiti da Nuvola
+
+on:
+  schedule:
+    # orari in UTC: in Italia sono le 13, 15, 17, 19, 21 (ora solare)
+    - cron: "5 12,14,16,18,20 * * *"
+    # il 1° del mese: tiene attivo il repository (GitHub spegne i cron dopo 60 giorni senza modifiche)
+    - cron: "0 6 1 * *"
+  workflow_dispatch:
+    inputs:
+      debug:
+        description: "Salva pagine e screenshot per controllo"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  aggiorna:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install
+      - run: npx playwright install --with-deps chromium
+      - name: Leggi Nuvola e aggiorna l'app
+        if: github.event.schedule != '0 6 1 * *'
+        env:
+          NUVOLA_USER: ${{ secrets.NUVOLA_USER }}
+          NUVOLA_PASS: ${{ secrets.NUVOLA_PASS }}
+          IMPORT_SECRET: ${{ secrets.IMPORT_SECRET }}
+          DEBUG: ${{ inputs.debug && '1' || '0' }}
+        run: npm run aggiorna
+      - name: Salva il controllo (solo in modalità debug)
+        if: always() && inputs.debug
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug
+          path: debug/
+          retention-days: 3
+      - name: Tieni attivo il repository
+        if: github.event.schedule == '0 6 1 * *'
+        run: |
+          git config user.name "compiti-bot"
+          git config user.email "compiti-bot@users.noreply.github.com"
+          date -u > .ultimo-controllo
+          git add .ultimo-controllo
+          git commit -m "Controllo mensile" && git push
