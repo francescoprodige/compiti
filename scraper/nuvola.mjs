@@ -159,30 +159,63 @@ function assegnaId(compiti) {
   return compiti;
 }
 
-// Cerca verifiche/interrogazioni: nel testo dei compiti (stesso giorno) e negli argomenti di lezione (date tipo 6/11)
-function trovaVerifiche(compiti, argomentiTesto, figlioId, dal, al) {
+// Analizza la vista settimanale degli argomenti di lezione -> [{data, materia, testo}]
+function analizzaArgomenti(testo, inizioSettimana) {
+  const r = testo.split("\n").map((s) => s.trim()).filter(Boolean);
+  const out = [];
+  let giorno = null, materia = null;
+  const isGiorno = (k) => GIORNI.includes((r[k] || "").toLowerCase()) && /^\d{1,2}$/.test(r[k + 1] || "");
+  const isMateria = (x) => x && x === x.toUpperCase() && /[A-Z]{3,}/.test(x) && x.length < 50 && !/^\d/.test(x);
+  for (let i = 0; i < r.length; i++) {
+    if (isGiorno(i)) {
+      giorno = addGiorni(inizioSettimana, GIORNI.indexOf(r[i].toLowerCase()));
+      i++; materia = null; continue;
+    }
+    if (!giorno) continue;
+    if (/^\d+ᵃ ora$/i.test(r[i]) || /^\d+\S* ora$/i.test(r[i])) { materia = null; if (/^\d{1,2}:\d{2}-\d{1,2}:\d{2}$/.test(r[i + 1] || "")) i++; continue; }
+    if (/^nessun argomento$/i.test(r[i])) { materia = null; continue; }
+    if (isMateria(r[i])) { materia = titolo(r[i]); continue; }
+    if (materia) out.push({ data: iso(giorno), materia, testo: r[i] });
+  }
+  return out;
+}
+
+// Cerca verifiche/interrogazioni:
+// 1) argomenti di lezione di oggi o futuri (programmati dal prof) -> giorno della lezione
+// 2) argomenti passati che annunciano una data (es. "verifica del 6/11")
+// 3) testo dei compiti ("ripassare per la verifica") -> giorno di consegna
+function trovaVerifiche(compiti, argomenti, figlioId, dal, al) {
   const out = new Map();
-  const add = (v) => { if (v.data >= dal && v.data <= al) out.set(`${v.figlio}-${v.data.replaceAll("-", "")}-${slug(v.materia)}`, v); };
-  const tipo = (s) => (/interrog/i.test(s) ? "Interrogazione" : "Verifica");
+  const peso = { confermata: 2, da_confermare: 1 };
+  const add = (v) => {
+    if (v.data < dal || v.data > al) return;
+    const k = `${v.figlio}-${v.data.replaceAll("-", "")}-${slug(v.materia)}`;
+    const old = out.get(k);
+    if (!old || peso[v.stato] > peso[old.stato] || (peso[v.stato] === peso[old.stato] && v.programmata)) out.set(k, { ...v, id: k });
+  };
+  const tipo = (s) => (/interrog/i.test(s) ? "Interrogazione" : /\btema\b/i.test(s) ? "Tema" : "Verifica");
+  const nonVerifica = /correzion|corrett|consegna|restituzion|valutazion|recupero/i;
+  const condizionale = /\b(in caso|se la|se il|eventualmente|forse|da definire)\b/i;
   for (const c of compiti) {
     if (PAROLE_VERIFICA.test(c.testo)) add({ figlio: c.figlio, data: c.data, materia: c.materia, tipo: tipo(c.testo), descrizione: c.testo.split("\n")[0].slice(0, 160), stato: "da_confermare", fonte: "testo compiti" });
   }
-  // Argomenti di lezione: righe con parola chiave e una data gg/mm
-  const righe = argomentiTesto.split("\n").map((s) => s.trim()).filter(Boolean);
-  let materiaCorrente = "";
-  for (const riga of righe) {
-    if (riga === riga.toUpperCase() && /[A-Z]{3,}/.test(riga) && riga.length < 40) { materiaCorrente = titolo(riga); continue; }
-    const conParola = PAROLE_VERIFICA.test(riga) || /\bV\.\s/.test(riga);
-    const tutteDate = riga.match(/\b\d{1,2}\/\d{1,2}(?:\/\d{2,4})?\b/g) || [];
-    const dm = riga.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/);
-    if (conParola && dm && materiaCorrente) {
-      const ref = oggi();
-      const d = new Date(ref.getFullYear(), Number(dm[2]) - 1, Number(dm[1]), 12);
-      if (ref - d > 1000 * 3600 * 24 * 180) d.setFullYear(d.getFullYear() + 1);
-      add({ figlio: figlioId, data: iso(d), materia: materiaCorrente, tipo: tipo(riga), descrizione: riga.slice(0, 160), stato: CONFERMA.test(riga) && tutteDate.length === 1 ? "confermata" : "da_confermare", fonte: "argomenti di lezione" });
+  const oggiIso = iso(oggi());
+  for (const a of argomenti) {
+    const parola = PAROLE_VERIFICA.test(a.testo) || /\btema\b/i.test(a.testo) || /\bV\.\s/.test(a.testo);
+    if (!parola) continue;
+    if (a.data >= oggiIso && !nonVerifica.test(a.testo)) {
+      add({ figlio: figlioId, data: a.data, materia: a.materia, tipo: tipo(a.testo), descrizione: a.testo.slice(0, 160), stato: condizionale.test(a.testo) ? "da_confermare" : "confermata", fonte: "argomenti di lezione", programmata: true });
+    } else if (a.data < oggiIso) {
+      const date = a.testo.match(/\b\d{1,2}\/\d{1,2}(?:\/\d{2,4})?\b/g) || [];
+      for (const d0 of date) {
+        const [g, m] = d0.split("/").map(Number);
+        const d = new Date(oggi().getFullYear(), m - 1, g, 12);
+        if (oggi() - d > 1000 * 3600 * 24 * 180) d.setFullYear(d.getFullYear() + 1);
+        add({ figlio: figlioId, data: iso(d), materia: a.materia, tipo: tipo(a.testo), descrizione: a.testo.slice(0, 160), stato: CONFERMA.test(a.testo) && date.length === 1 ? "confermata" : "da_confermare", fonte: "argomenti di lezione" });
+      }
     }
   }
-  return [...out.values()].map((v) => ({ ...v, id: `${v.figlio}-${v.data.replaceAll("-", "")}-${slug(v.materia)}` }));
+  return [...out.values()].map(({ programmata, ...v }) => v);
 }
 
 async function main() {
@@ -207,13 +240,13 @@ async function main() {
         await dump(page, `10-${f.id}-compiti-${w}`);
         suoi.push(...analizzaSettimana(await testoPagina(page), inizio, f.id));
       }
-      let argomenti = "";
+      const argomenti = [];
       for (let w = -2; w < WEEKS; w++) {
         const inizio = addGiorni(lun, w * 7);
         await page.goto(`${BASE}/area-tutore/argomenti-lezione?data=${iso(addGiorni(inizio, 3))}&vista=settimana`, { waitUntil: "networkidle" }).catch(() => {});
         await page.waitForTimeout(800);
         await dump(page, `20-${f.id}-argomenti-${w}`);
-        argomenti += "\n" + (await testoPagina(page).catch(() => ""));
+        argomenti.push(...analizzaArgomenti(await testoPagina(page).catch(() => ""), inizio));
       }
       if (DEBUG) {
         for (const [nome, path] of [["calendario", "/area-tutore/calendario"], ["eventi", "/area-tutore/documenti-eventi"]]) {
