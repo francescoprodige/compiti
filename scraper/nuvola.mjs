@@ -41,7 +41,9 @@ async function dump(page, nome) {
   if (!DEBUG) return;
   fs.mkdirSync("debug", { recursive: true });
   await page.screenshot({ path: `debug/${nome}.png`, fullPage: true }).catch(() => {});
-  fs.writeFileSync(`debug/${nome}.txt`, await testoPagina(page).catch(() => ""));
+  const testo = await testoPagina(page).catch(() => "");
+  fs.writeFileSync(`debug/${nome}.txt`, testo);
+  await rpc("salva_debug", { segreto: IMPORT_SECRET, p_nome: nome, p_url: page.url(), p_testo: testo }).catch(() => {});
 }
 
 async function testoPagina(page) {
