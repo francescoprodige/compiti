@@ -9,11 +9,13 @@ const SB_URL = process.env.SUPABASE_URL || "https://ukjpemlqushmuakswoww.supabas
 const SB_KEY = process.env.SUPABASE_KEY || "sb_publishable_zqMoAof9UjILkFp2TlDPtQ_-1BfpDjN";
 const { NUVOLA_USER, NUVOLA_PASS, IMPORT_SECRET } = process.env;
 const DEBUG = process.env.DEBUG === "1";
-const WEEKS = 2; // settimana corrente + successiva
+const WEEKS = 3; // settimana corrente + le due successive (copre le verifiche a 14 giorni)
 
 const MESI = { gennaio:1, febbraio:2, marzo:3, aprile:4, maggio:5, giugno:6, luglio:7, agosto:8, settembre:9, ottobre:10, novembre:11, dicembre:12,
   gen:1, feb:2, mar:3, apr:4, mag:5, giu:6, lug:7, ago:8, set:9, ott:10, nov:11, dic:12 };
 const GIORNI = ["lun", "mar", "mer", "gio", "ven", "sab", "dom"];
+// Frasi esplicite: la verifica è data per confermata
+const CONFERMA = /\b(fissat[ao]|programmat[ao]|stabilit[ao]|si terr[àa]|si svolger[àa]|ci sar[àa])\b/i;
 const PAROLE_VERIFICA = /\b(verifica|verifiche|interrogazion[ei]|interrogat[oi]|compito in classe|prova scritta|test)\b/i;
 
 const pad = (n) => String(n).padStart(2, "0");
@@ -169,12 +171,13 @@ function trovaVerifiche(compiti, argomentiTesto, figlioId, dal, al) {
   for (const riga of righe) {
     if (riga === riga.toUpperCase() && /[A-Z]{3,}/.test(riga) && riga.length < 40) { materiaCorrente = titolo(riga); continue; }
     const conParola = PAROLE_VERIFICA.test(riga) || /\bV\.\s/.test(riga);
+    const tutteDate = riga.match(/\b\d{1,2}\/\d{1,2}(?:\/\d{2,4})?\b/g) || [];
     const dm = riga.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/);
     if (conParola && dm && materiaCorrente) {
       const ref = oggi();
       const d = new Date(ref.getFullYear(), Number(dm[2]) - 1, Number(dm[1]), 12);
       if (ref - d > 1000 * 3600 * 24 * 180) d.setFullYear(d.getFullYear() + 1);
-      add({ figlio: figlioId, data: iso(d), materia: materiaCorrente, tipo: tipo(riga), descrizione: riga.slice(0, 160), stato: "da_confermare", fonte: "argomenti di lezione" });
+      add({ figlio: figlioId, data: iso(d), materia: materiaCorrente, tipo: tipo(riga), descrizione: riga.slice(0, 160), stato: CONFERMA.test(riga) && tutteDate.length === 1 ? "confermata" : "da_confermare", fonte: "argomenti di lezione" });
     }
   }
   return [...out.values()].map((v) => ({ ...v, id: `${v.figlio}-${v.data.replaceAll("-", "")}-${slug(v.materia)}` }));

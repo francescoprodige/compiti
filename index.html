@@ -90,6 +90,18 @@ h1{font-family:var(--f-display);font-weight:800;font-size:1.9rem;letter-spacing:
 .pill.today{background:var(--test);color:var(--paper)}
 .tnone{font-size:.9rem;color:var(--muted);margin:0}
 .dayhead .tp{color:var(--test);font-weight:700;font-size:.75rem;text-transform:uppercase;letter-spacing:.08em}
+.tacts{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.tbtn{appearance:none;font:inherit;font-size:.8rem;font-weight:700;border-radius:999px;padding:4px 12px;cursor:pointer;border:1.5px solid var(--test);background:transparent;color:var(--test)}
+.tbtn.ok{background:var(--test);color:var(--paper)}
+.tbtn.warn{border-style:dashed}
+.tbtn:focus-visible,.tadd:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.tadd{appearance:none;font:inherit;font-size:.85rem;font-weight:700;color:var(--test);background:none;border:0;padding:6px 0 0;cursor:pointer;text-decoration:underline}
+.tform{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;padding-top:10px;border-top:1px dashed var(--test)}
+.tform label{display:flex;flex-direction:column;gap:3px;font-size:.78rem;font-weight:700;color:var(--muted);min-width:0}
+.tform input,.tform select{font:inherit;font-size:.95rem;padding:7px 8px;border:1.5px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink);min-width:0;width:100%}
+.tform .full{grid-column:1/-1}
+.tform .row{grid-column:1/-1;display:flex;gap:8px}
+.tform .msg{grid-column:1/-1;font-size:.85rem;color:var(--late);margin:0}
 .kid .v{font-size:.78rem;color:var(--test);font-weight:700}
 @media (max-width:420px){h1{font-size:1.6rem}.kid{padding:8px}.kid .n{font-size:1rem}}
 @media (prefers-reduced-motion:no-preference){.item{transition:background .2s,border-color .2s}}
@@ -108,6 +120,16 @@ h1{font-family:var(--f-display);font-weight:800;font-size:1.9rem;letter-spacing:
   <section class="tests" id="tests" aria-labelledby="tests-h" hidden>
     <h2 id="tests-h"><span>Verifiche e interrogazioni</span><small>prossime 2 settimane</small></h2>
     <ul class="tlist" id="tlist"></ul>
+    <button class="tadd" id="tadd" type="button">+ Aggiungi verifica o interrogazione</button>
+    <form class="tform" id="tform" hidden>
+      <label>Materia<input id="f-materia" required maxlength="60" autocomplete="off" list="materie"></label>
+      <label>Giorno<input id="f-data" type="date" required></label>
+      <label>Tipo<select id="f-tipo"><option>Verifica</option><option>Interrogazione</option></select></label>
+      <label>Note (facoltative)<input id="f-desc" maxlength="200" autocomplete="off" placeholder="es. capitolo 3"></label>
+      <p class="msg" id="f-msg" hidden></p>
+      <div class="row"><button class="tbtn ok" type="submit">Aggiungi</button><button class="tbtn" type="button" id="f-annulla">Annulla</button></div>
+      <datalist id="materie"></datalist>
+    </form>
   </section>
   <main id="main"><p class="note">Caricamento dei compiti…</p></main>
 
@@ -145,6 +167,7 @@ const fmtStamp=ts=>new Date(ts).toLocaleString("it-IT",{weekday:"short",day:"num
 function setKid(id){
   state.kid=id;
   try{localStorage.setItem("kid",id)}catch(e){}
+  const f=document.querySelector("#tform");if(f&&!f.hidden){f.reset();apriForm(false)}
   render();
 }
 function upcomingTests(kidId){
@@ -193,6 +216,12 @@ function renderTests(kid){
     if(v.stato!=="confermata"){const p=document.createElement("span");p.className="pill tbd";p.textContent="Da confermare";m.appendChild(p)}
     b.appendChild(m);
     if(v.descrizione){const x=document.createElement("div");x.className="td";x.textContent=v.descrizione;b.appendChild(x)}
+    const acts=document.createElement("div");acts.className="tacts";
+    if(v.stato!=="confermata"){const c=document.createElement("button");c.type="button";c.className="tbtn ok";c.textContent="✓ Confermata";c.addEventListener("click",()=>decidi(v,"confermata"));acts.appendChild(c)}
+    else if(v.scelta==="confermata"&&v.fonte!=="manuale"){const c=document.createElement("button");c.type="button";c.className="tbtn";c.textContent="Annulla conferma";c.addEventListener("click",()=>decidi(v,null));acts.appendChild(c)}
+    const x=document.createElement("button");x.type="button";x.className="tbtn";x.textContent=v.fonte==="manuale"?"✕ Togli":"✕ Non c’è";
+    x.addEventListener("click",()=>{if(x.dataset.arm){decidi(v,"esclusa")}else{x.dataset.arm="1";x.classList.add("warn");x.textContent="Tocca ancora per togliere";setTimeout(()=>{if(x.isConnected){delete x.dataset.arm;x.classList.remove("warn");x.textContent=v.fonte==="manuale"?"✕ Togli":"✕ Non c’è"}},4000)}});
+    acts.appendChild(x);b.appendChild(acts);
     li.append(dt,b);ul.appendChild(li);
   }
 }
@@ -275,6 +304,38 @@ async function load(){
     }else showErr("Non riesco a collegarmi. Controlla la connessione: riprovo da solo tra poco.");
   }
 }
+async function decidi(v,valore){
+  const prima={stato:v.stato,scelta:v.scelta};
+  if(valore==="esclusa")state.tests=state.tests.filter(x=>x!==v);
+  else{v.scelta=valore;v.stato=valore||"da_confermare"}
+  render();
+  try{await rpc("decidi_verifica",{codice:state.code,verifica:v.id,valore});if(valore===null)load()}
+  catch(e){if(valore==="esclusa")state.tests.push(v);else Object.assign(v,prima);render();showErr("Modifica non salvata. Riprova quando sei connesso.")}
+}
+function apriForm(open){
+  const f=$("#tform");f.hidden=!open;$("#tadd").hidden=open;$("#f-msg").hidden=true;
+  if(open){
+    const t=todayISO();$("#f-data").min=t;$("#f-data").max=addDays(t,60);if(!$("#f-data").value)$("#f-data").value=nextSchoolDay(t);
+    const dl=$("#materie");dl.textContent="";
+    [...new Set(state.tasks.filter(x=>x.figlio===state.kid).map(x=>x.materia))].sort().forEach(m=>{const o=document.createElement("option");o.value=m;dl.appendChild(o)});
+    $("#f-materia").focus();
+  }
+}
+$("#tadd").addEventListener("click",()=>apriForm(true));
+$("#f-annulla").addEventListener("click",()=>{$("#tform").reset();apriForm(false)});
+$("#tform").addEventListener("submit",async ev=>{
+  ev.preventDefault();
+  const materia=$("#f-materia").value.trim(),data=$("#f-data").value;
+  const msg=$("#f-msg");
+  if(!materia||!data){msg.textContent="Scrivi la materia e scegli il giorno.";msg.hidden=false;return}
+  const btn=ev.submitter;if(btn)btn.disabled=true;
+  try{
+    await rpc("aggiungi_verifica",{codice:state.code,p_figlio:state.kid,p_data:data,p_materia:materia,p_tipo:$("#f-tipo").value,p_descrizione:$("#f-desc").value});
+    $("#tform").reset();apriForm(false);await load();
+  }catch(e){msg.textContent="Non sono riuscito a salvarla. Controlla la connessione e riprova.";msg.hidden=false}
+  finally{if(btn)btn.disabled=false}
+});
+
 async function toggle(t,cb){
   const val=cb.checked;
   t.fatto=val;t.fatto_il=val?new Date().toISOString():null;render();
