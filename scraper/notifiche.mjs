@@ -28,9 +28,9 @@ const nomeGiorno = (iso) => new Date(iso + "T12:00:00Z").toLocaleDateString("it-
 const h = Number(ora);
 let tipo = process.env.TIPO || (h === 15 || h === 16 ? "verifiche" : h === 20 || h === 21 ? "compiti" : "");
 const forzato = !!process.env.TIPO;
-// Il sabato niente notifiche: quelle per il lunedì arrivano venerdì e domenica.
+// Il sabato solo i compiti delle 20 (per vedere cosa è stato fatto in giornata), niente verifiche.
 const giornoSett = new Date(oggiIt + "T12:00:00Z").getUTCDay();
-if (!forzato && giornoSett === 6) { console.log("Sabato: nessuna notifica."); process.exit(0); }
+if (!forzato && giornoSett === 6 && tipo === "verifiche") { console.log("Sabato: niente notifica verifiche."); process.exit(0); }
 if (!tipo) { console.log(`Ora italiana ${ora}: nessuna notifica da inviare.`); process.exit(0); }
 
 const giorno = prossimoGiornoScuola(oggiIt);
