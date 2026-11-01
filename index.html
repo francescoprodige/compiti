@@ -8,6 +8,11 @@
 <meta name="apple-mobile-web-app-title" content="Compiti">
 <meta name="theme-color" content="#2f5bd3">
 <title>Compiti di casa</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="mobile-web-app-capable" content="yes">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap">
 <style>
@@ -105,6 +110,11 @@ h1{font-family:var(--f-display);font-weight:800;font-size:1.9rem;letter-spacing:
 .pastbar{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin:0 0 14px}
 .pastbar .link{font-size:.9rem}
 .day.pastdone{opacity:.78}
+.codebox{display:flex;flex-direction:column;gap:10px;background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:16px}
+.codebox label{display:flex;flex-direction:column;gap:6px;font-weight:700}
+.codebox input{font:inherit;font-size:1rem;padding:10px;border:1.5px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink)}
+.codebox button{align-self:flex-start;font:inherit;font-weight:700;padding:8px 16px;border-radius:8px;border:0;background:var(--accent);color:var(--paper);cursor:pointer}
+.codebox .e{color:var(--late);margin:0;font-size:.9rem}
 .kid .v{font-size:.78rem;color:var(--test);font-weight:700}
 @media (max-width:420px){h1{font-size:1.6rem}.kid{padding:8px}.kid .n{font-size:1rem}}
 @media (prefers-reduced-motion:no-preference){.item{transition:background .2s,border-color .2s}}
@@ -298,19 +308,36 @@ function renderSync(){
 }
 function showErr(msg){const e=$("#err");e.textContent=msg;e.hidden=!msg}
 
+function applica(d){
+  state.tasks=d.compiti||[];state.tests=d.verifiche||[];state.meta=d.meta||{};
+  const fig=Array.isArray(state.meta.figli)?state.meta.figli:[...new Set(state.tasks.map(t=>t.figlio))].map(id=>({id,nome:id[0].toUpperCase()+id.slice(1)}));
+  state.kids=fig.map((k,i)=>({...k,color:COLORS[i%COLORS.length]}));
+  renderSync();render();
+}
+function mostraCodice(errore){
+  $("#sync").textContent="";$("#tests").hidden=true;$("#kids").textContent="";
+  const m=$("#main");m.textContent="";
+  const f=document.createElement("form");f.className="codebox";
+  f.innerHTML='<label for="codice-in">Codice di famiglia<input id="codice-in" autocomplete="off" autocapitalize="off" spellcheck="false" required></label><p class="e" hidden></p><button type="submit">Entra</button><p class="meta">Il codice è la parte finale del link di famiglia, dopo <b>k=</b>.</p>';
+  if(errore){const e=f.querySelector(".e");e.textContent=errore;e.hidden=false}
+  f.addEventListener("submit",ev=>{ev.preventDefault();const v=f.querySelector("input").value.trim().replace(/^.*k=/,"");if(!v)return;
+    state.code=v;try{localStorage.setItem("codice",v)}catch(_){}m.innerHTML='<p class="note">Caricamento dei compiti…</p>';load()});
+  m.appendChild(f);
+}
 async function load(){
-  if(!state.code){$("#main").innerHTML='<p class="note">Apri l’app dal link di famiglia: contiene il codice di accesso.</p>';$("#sync").textContent="";return}
+  if(!state.code){mostraCodice("");return}
   try{
     const d=await rpc("leggi",{codice:state.code});
-    state.tasks=d.compiti||[];state.tests=d.verifiche||[];state.meta=d.meta||{};
-    const fig=Array.isArray(state.meta.figli)?state.meta.figli:[...new Set(state.tasks.map(t=>t.figlio))].map(id=>({id,nome:id[0].toUpperCase()+id.slice(1)}));
-    state.kids=fig.map((k,i)=>({...k,color:COLORS[i%COLORS.length]}));
-    showErr("");renderSync();render();
+    try{localStorage.setItem("ultimi",JSON.stringify(d))}catch(_){}
+    showErr("");applica(d);
   }catch(e){
     if(e.status===400||e.status===401||e.status===403){
-      try{localStorage.removeItem("codice")}catch(_){}
-      $("#main").innerHTML='<p class="note">Il codice di accesso non è valido. Riapri l’app dal link di famiglia.</p>';
-    }else showErr("Non riesco a collegarmi. Controlla la connessione: riprovo da solo tra poco.");
+      try{localStorage.removeItem("codice");localStorage.removeItem("ultimi")}catch(_){}
+      state.code=null;mostraCodice("Il codice non è valido. Controllalo e riprova.");
+    }else{
+      if(!state.kids.length){try{const c=JSON.parse(localStorage.getItem("ultimi")||"null");if(c)applica(c)}catch(_){}}
+      showErr(state.kids.length?"Sei senza connessione: vedi gli ultimi dati scaricati.":"Non riesco a collegarmi. Controlla la connessione: riprovo da solo tra poco.");
+    }
   }
 }
 async function decidi(v,valore){
@@ -378,10 +405,10 @@ $("#pastBtn").addEventListener("click",async()=>{
 $("#pastHide").addEventListener("click",()=>conAncora(()=>{state.pastDays=0;render()}));
 state.code=getCode();
 try{state.kid=localStorage.getItem("kid")}catch(e){}
-if(location.hash.includes("k="))history.replaceState(null,"",location.pathname+location.search);
 load();
 setInterval(()=>{if(document.visibilityState==="visible")load()},60000);
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")load()});
+if("serviceWorker" in navigator)window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
 </script>
 
 </body>
