@@ -2,6 +2,12 @@
   "name": "compiti-nuvola",
   "private": true,
   "type": "module",
-  "scripts": { "aggiorna": "node scraper/nuvola.mjs" },
-  "dependencies": { "playwright": "1.48.2" }
+  "scripts": {
+    "aggiorna": "node scraper/nuvola.mjs",
+    "notifiche": "node scraper/notifiche.mjs"
+  },
+  "dependencies": {
+    "playwright": "1.48.2",
+    "web-push": "3.6.7"
+  }
 }

@@ -115,6 +115,16 @@ h1{font-family:var(--f-display);font-weight:800;font-size:1.9rem;letter-spacing:
 .codebox input{font:inherit;font-size:1rem;padding:10px;border:1.5px solid var(--line);border-radius:8px;background:var(--paper);color:var(--ink)}
 .codebox button{align-self:flex-start;font:inherit;font-weight:700;padding:8px 16px;border-radius:8px;border:0;background:var(--accent);color:var(--paper);cursor:pointer}
 .codebox .e{color:var(--late);margin:0;font-size:.9rem}
+.notif{margin-top:20px;background:var(--paper);border:1px solid var(--line);border-radius:12px}
+.notif summary{cursor:pointer;padding:12px 14px;font-weight:700;list-style:none;display:flex;justify-content:space-between;gap:8px}
+.notif summary::-webkit-details-marker{display:none}
+.notif summary span{font-weight:400;color:var(--muted);font-size:.85rem}
+.notif .in{padding:0 14px 14px;display:flex;flex-direction:column;gap:10px}
+.notif label{display:flex;gap:10px;align-items:center}
+.notif input[type=checkbox]{width:20px;height:20px;accent-color:var(--accent)}
+.notif .nb{align-self:flex-start;font:inherit;font-weight:700;padding:8px 16px;border-radius:8px;border:0;background:var(--accent);color:var(--paper);cursor:pointer}
+.notif .nb.off{background:transparent;color:var(--late);border:1.5px solid var(--late)}
+.notif .nm{margin:0;font-size:.85rem;color:var(--muted)}
 .kid .v{font-size:.78rem;color:var(--test);font-weight:700}
 @media (max-width:420px){h1{font-size:1.6rem}.kid{padding:8px}.kid .n{font-size:1rem}}
 @media (prefers-reduced-motion:no-preference){.item{transition:background .2s,border-color .2s}}
@@ -146,6 +156,16 @@ h1{font-family:var(--f-display);font-weight:800;font-size:1.9rem;letter-spacing:
   </section>
   <div class="pastbar"><button class="link" id="pastBtn" type="button">↑ Mostra giorni precedenti</button><button class="link" id="pastHide" type="button" hidden>Nascondi giorni passati</button></div>
   <main id="main"><p class="note">Caricamento dei compiti…</p></main>
+
+  <details class="notif" id="notif">
+    <summary>Notifiche su questo telefono <span id="n-stato">spente</span></summary>
+    <div class="in">
+      <label><input type="checkbox" id="n-ver" checked> Verifiche di domani, alle 15:00</label>
+      <label><input type="checkbox" id="n-com" checked> Compiti di domani non spuntati, alle 20:00</label>
+      <button class="nb" id="n-btn" type="button">Attiva notifiche</button>
+      <p class="nm" id="n-msg">Ricevi un riepilogo per tutti i figli. Si attivano solo su questo telefono.</p>
+    </div>
+  </details>
 
   <div class="foot">
     <span>I compiti arrivano da Nuvola più volte al giorno. Le spunte restano anche quando i compiti vengono aggiornati.</span>
@@ -408,6 +428,48 @@ try{state.kid=localStorage.getItem("kid")}catch(e){}
 load();
 setInterval(()=>{if(document.visibilityState==="visible")load()},60000);
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")load()});
+const VAPID="BNpjnnjYcw8aNzcI_JRqgZy8jDFYTZASGgGUI1EjNWiwuJ4nGhwRA-_k-gkdZJ0C8eSG6ImwpXHHvG3Q7iZLZho";
+const nState={sub:null};
+function b64u(s){const p="=".repeat((4-s.length%4)%4);const r=atob((s+p).replace(/-/g,"+").replace(/_/g,"/"));return Uint8Array.from(r,c=>c.charCodeAt(0))}
+function nUI(attive,msg){
+  $("#n-stato").textContent=attive?"attive":"spente";
+  const b=$("#n-btn");b.textContent=attive?"Disattiva notifiche":"Attiva notifiche";b.classList.toggle("off",attive);
+  if(msg!==undefined)$("#n-msg").textContent=msg;
+}
+async function nInit(){
+  if(!("serviceWorker" in navigator)||!("PushManager" in window)){$("#notif").hidden=true;return}
+  try{
+    const reg=await navigator.serviceWorker.ready;
+    nState.sub=await reg.pushManager.getSubscription();
+    if(nState.sub&&state.code){
+      const st=await rpc("stato_iscrizione",{codice:state.code,p_endpoint:nState.sub.endpoint}).catch(()=>null);
+      if(st){$("#n-ver").checked=st.verifiche;$("#n-com").checked=st.compiti;nUI(true);return}
+    }
+    nUI(false);
+    if(Notification.permission==="denied")nUI(false,"Le notifiche sono bloccate per questa app. Riattivale dalle impostazioni del telefono (Notifiche app).");
+  }catch(e){}
+}
+async function nSalva(){
+  await rpc("iscrivi",{codice:state.code,p_sub:nState.sub.toJSON(),p_verifiche:$("#n-ver").checked,p_compiti:$("#n-com").checked});
+}
+$("#n-btn").addEventListener("click",async()=>{
+  const b=$("#n-btn");b.disabled=true;
+  try{
+    const reg=await navigator.serviceWorker.ready;
+    if(nState.sub&&$("#n-stato").textContent==="attive"){
+      await rpc("disiscrivi",{codice:state.code,p_endpoint:nState.sub.endpoint}).catch(()=>{});
+      await nState.sub.unsubscribe().catch(()=>{});nState.sub=null;nUI(false,"Notifiche disattivate su questo telefono.");
+    }else{
+      const perm=await Notification.requestPermission();
+      if(perm!=="granted"){nUI(false,"Non hai dato il permesso. Puoi attivarlo dalle impostazioni del telefono.");return}
+      nState.sub=await reg.pushManager.getSubscription()||await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64u(VAPID)});
+      await nSalva();nUI(true,"Fatto: riceverai le notifiche su questo telefono.");
+    }
+  }catch(e){$("#n-msg").textContent="Non sono riuscito ad attivarle. Controlla la connessione e riprova."}
+  finally{b.disabled=false}
+});
+for(const id of ["#n-ver","#n-com"])$(id).addEventListener("change",()=>{if(nState.sub&&$("#n-stato").textContent==="attive")nSalva().then(()=>$("#n-msg").textContent="Preferenze salvate.").catch(()=>$("#n-msg").textContent="Preferenze non salvate. Riprova.")});
+setTimeout(nInit,500);
 if("serviceWorker" in navigator)window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
 </script>
 

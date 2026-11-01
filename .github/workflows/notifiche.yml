@@ -1,0 +1,30 @@
+name: Notifiche
+
+on:
+  schedule:
+    # 15:00 e 20:00 ora italiana: due orari UTC per coprire ora solare e legale;
+    # lo script invia solo quando in Italia sono le 15 o le 20.
+    - cron: "0 13,14,18,19 * * *"
+  workflow_dispatch:
+    inputs:
+      tipo:
+        description: "Prova: quale notifica inviare subito"
+        type: choice
+        options: [verifiche, compiti]
+        default: verifiche
+
+jobs:
+  invia:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install --omit=optional --no-audit --no-fund web-push@3.6.7
+      - name: Invia notifiche
+        env:
+          IMPORT_SECRET: ${{ secrets.IMPORT_SECRET }}
+          TIPO: ${{ inputs.tipo }}
+        run: node scraper/notifiche.mjs
