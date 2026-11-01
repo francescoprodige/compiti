@@ -66,10 +66,14 @@ if (tipo === "verifiche") {
 webpush.setVapidDetails("mailto:compiti-bot@users.noreply.github.com", d.vapid_public, d.vapid_private);
 const payload = JSON.stringify({ title: titolo, body: corpo, tag: tipo, url: APP_URL });
 const scadute = [];
+const log = [];
 let inviate = 0;
 for (const s of d.iscrizioni.filter((s) => s[tipo])) {
-  try { await webpush.sendNotification(s.sub, payload, { TTL: 6 * 3600 }); inviate++; }
-  catch (e) { console.warn("Invio fallito:", e.statusCode, e.body || e.message); if (e.statusCode === 404 || e.statusCode === 410) scadute.push(s.endpoint); }
+  const ep = s.endpoint.slice(-12);
+  try { const r = await webpush.sendNotification(s.sub, payload, { TTL: 6 * 3600, urgency: "high" }); inviate++; log.push(`OK ${ep} ${r.statusCode}`); }
+  catch (e) { log.push(`ERR ${ep} ${e.statusCode} ${e.body || e.message}`); if (e.statusCode === 404 || e.statusCode === 410) scadute.push(s.endpoint); }
 }
+console.log(log.join("\n"));
+await rpc("salva_debug", { segreto: IMPORT_SECRET, p_nome: "notifiche-ultimo-invio", p_url: tipo, p_testo: `${new Date().toISOString()}\n${payload}\n${log.join("\n")}` }).catch(() => {});
 await rpc("esito_notifiche", { segreto: IMPORT_SECRET, p_chiave: forzato ? `prova-${Date.now()}` : chiave, p_scadute: scadute });
 console.log(`${titolo}: inviate ${inviate}, scadute ${scadute.length}`);
