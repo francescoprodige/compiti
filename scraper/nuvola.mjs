@@ -249,7 +249,7 @@ async function main() {
         argomenti.push(...analizzaArgomenti(await testoPagina(page).catch(() => ""), inizio));
       }
       if (DEBUG) {
-        for (const [nome, path] of [["calendario", "/area-tutore/calendario"], ["eventi", "/area-tutore/documenti-eventi"]]) {
+        for (const [nome, path] of [["voti", "/area-tutore/voti"], ["note", "/area-tutore/note"]]) {
           await page.goto(`${BASE}${path}`, { waitUntil: "networkidle" }).catch(() => {});
           await page.waitForTimeout(1000);
           await dump(page, `30-${f.id}-${nome}`);
