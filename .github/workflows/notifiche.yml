@@ -1,10 +1,8 @@
 name: Notifiche
 
 on:
-  schedule:
-    # 15:00 e 20:00 ora italiana: due orari UTC per coprire ora solare e legale;
-    # lo script invia solo quando in Italia sono le 15 o le 20.
-    - cron: "0 13,14,18,19 * * *"
+  # Gli invii programmati ora partono da Supabase (pg_cron ogni 15 minuti), più puntuale di GitHub.
+  # Questo workflow resta solo per le prove manuali.
   workflow_dispatch:
     inputs:
       tipo:

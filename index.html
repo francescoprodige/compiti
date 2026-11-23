@@ -128,6 +128,29 @@ h1{font-family:var(--f-display);font-weight:800;font-size:1.9rem;letter-spacing:
 .kid .v{font-size:.78rem;color:var(--test);font-weight:700}
 @media (max-width:420px){h1{font-size:1.6rem}.kid{padding:8px}.kid .n{font-size:1rem}}
 @media (prefers-reduced-motion:no-preference){.item{transition:background .2s,border-color .2s}}
+[hidden]{display:none!important}
+.views{display:flex;gap:6px;margin:0 0 14px}
+.views button{flex:1;font:inherit;font-weight:700;padding:8px;border-radius:10px;border:1.5px solid var(--line);background:var(--paper);color:var(--muted);cursor:pointer}
+.views button[aria-pressed="true"]{border-color:var(--ink);color:var(--ink);box-shadow:inset 0 -3px 0 var(--ink)}
+.gsec{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:14px}
+.gsec h2{font-family:var(--f-display);font-weight:800;font-size:1rem;margin:0 0 8px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.gsec h2 small{font-family:var(--f-body);font-weight:400;font-size:.8rem;color:var(--muted)}
+.vrow{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;padding:7px 0;border-top:1px solid var(--line);align-items:baseline}
+.vrow:first-of-type{border-top:0}
+.vrow .m{font-weight:700;min-width:0;overflow-wrap:anywhere}
+.vrow .avg{font-variant-numeric:tabular-nums;font-weight:700}
+.chips{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:5px}
+.vchip{display:inline-flex;align-items:baseline;gap:4px;border-radius:7px;padding:2px 7px;font-variant-numeric:tabular-nums;font-weight:700;background:var(--bg);font-size:.92rem}
+.vchip small{font-weight:400;color:var(--muted);font-size:.72rem}
+.vchip.low{background:var(--late-bg);color:var(--late)}
+.vchip.hi{background:var(--ok-bg);color:var(--ok)}
+.vchip.new{outline:2px solid var(--accent)}
+.nrow{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid var(--line)}
+.nrow:first-of-type{border-top:0}
+.nrow .t{font-weight:700}
+.nrow.disc .t{color:var(--late)}
+.nrow .d{font-size:.85rem;color:var(--muted);white-space:nowrap}
+.newtag{font-size:.68rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--paper);background:var(--accent);border-radius:999px;padding:1px 7px;margin-left:6px;vertical-align:1px}
 </style>
 </head>
 <body>
@@ -137,9 +160,12 @@ h1{font-family:var(--f-display);font-weight:800;font-size:1.9rem;letter-spacing:
     <div class="sync" id="sync"><span class="dot stale"></span><span>Caricamento…</span></div>
   </header>
 
+  <div class="views" id="views" hidden><button type="button" id="v-compiti" aria-pressed="true">Compiti</button><button type="button" id="v-gen" aria-pressed="false">Voti e note</button></div>
   <div class="kids" role="tablist" id="kids"></div>
   <p class="ro" id="err" hidden></p>
 
+  <div id="vista-gen" hidden></div>
+  <div id="vista-compiti">
   <section class="tests" id="tests" aria-labelledby="tests-h" hidden>
     <h2 id="tests-h"><span>Verifiche e interrogazioni</span><small>prossime 2 settimane</small></h2>
     <ul class="tlist" id="tlist"></ul>
@@ -167,7 +193,9 @@ h1{font-family:var(--f-display);font-weight:800;font-size:1.9rem;letter-spacing:
     </div>
   </details>
 
+  </div>
   <div class="foot">
+    <button class="link" id="g-open" type="button">Area genitori</button>
     <span>I compiti arrivano da Nuvola più volte al giorno. Le spunte restano anche quando i compiti vengono aggiornati.</span>
   </div>
 </div>
@@ -259,6 +287,7 @@ function renderTests(kid){
   }
 }
 function render(){
+  if(G&&G.on){renderKids();$("#tests").hidden=true;gRender();return}
   if(!state.kids.length)return;
   if(!state.kids.some(k=>k.id===state.kid))state.kid=state.kids[0].id;
   renderKids();
@@ -429,6 +458,105 @@ load();
 setInterval(()=>{if(document.visibilityState==="visible")load()},60000);
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")load()});
 const VAPID="BNpjnnjYcw8aNzcI_JRqgZy8jDFYTZASGgGUI1EjNWiwuJ4nGhwRA-_k-gkdZJ0C8eSG6ImwpXHHvG3Q7iZLZho";
+// ---- Area genitori: voti e note (codice separato, solo sui telefoni dei genitori) ----
+var G={code:null,data:null,on:false};
+try{G.code=localStorage.getItem("codice_genitori")}catch(_){}
+function gMostra(on){
+  G.on=on;$("#vista-gen").hidden=!on;$("#vista-compiti").hidden=on;
+  $("#v-gen").setAttribute("aria-pressed",String(on));$("#v-compiti").setAttribute("aria-pressed",String(!on));
+  $("#views").hidden=!G.code;
+  if(on){if(location.hash!=="#genitori")history.replaceState(null,"","#genitori");gCarica()}
+  else if(location.hash==="#genitori")history.replaceState(null,"",location.pathname);
+  render();
+}
+function gForm(err){
+  const v=$("#vista-gen");v.textContent="";
+  const f=document.createElement("form");f.className="codebox";
+  f.innerHTML='<label for="gcod">Codice genitori<input id="gcod" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" required></label><p class="e" hidden></p><div class="row" style="display:flex;gap:8px"><button type="submit">Entra</button><button type="button" class="link" id="gann">Annulla</button></div><p class="meta">Voti e note si vedono solo su questo telefono dopo aver inserito il codice genitori.</p>';
+  if(err){const e=f.querySelector(".e");e.textContent=err;e.hidden=false}
+  f.querySelector("#gann").addEventListener("click",()=>gMostra(false));
+  f.addEventListener("submit",ev=>{ev.preventDefault();const c=f.querySelector("input").value.trim();if(!c)return;G.code=c;try{localStorage.setItem("codice_genitori",c)}catch(_){}gMostra(true)});
+  v.appendChild(f);f.querySelector("input").focus();
+}
+async function gCarica(){
+  if(!G.code){gForm("");return}
+  try{G.data=await rpc("leggi_genitori",{codice:G.code});try{localStorage.setItem("ultimi_gen",JSON.stringify(G.data))}catch(_){}gRender()}
+  catch(e){
+    if(e.status===400||e.status===401||e.status===403){G.code=null;try{localStorage.removeItem("codice_genitori");localStorage.removeItem("ultimi_gen")}catch(_){}$("#views").hidden=true;gForm("Codice non valido.");}
+    else{try{G.data=JSON.parse(localStorage.getItem("ultimi_gen")||"null")}catch(_){}if(G.data)gRender();showErr("Sei senza connessione: vedi gli ultimi dati scaricati.")}
+  }
+}
+const fmtD=iso=>new Date(iso+"T12:00:00").toLocaleDateString("it-IT",{day:"numeric",month:"short"});
+function gRender(){
+  if(!G.on||!G.data)return;
+  const kid=state.kids.find(k=>k.id===state.kid)||state.kids[0];if(!kid)return;
+  const v=$("#vista-gen");v.textContent="";v.style.setProperty("--kc",kid.color);
+  const voti=(G.data.voti||[]).filter(x=>x.figlio===kid.id), note=(G.data.note||[]).filter(x=>x.figlio===kid.id);
+  // Voti per materia con media
+  const sec=document.createElement("section");sec.className="gsec";
+  const num=voti.filter(x=>x.valore!=null);
+  const media=num.length?(num.reduce((a,x)=>a+Number(x.valore),0)/num.length):null;
+  sec.innerHTML='<h2><span>Voti</span><small></small></h2>';
+  sec.querySelector("small").textContent=media!=null?"media generale "+media.toFixed(2).replace(".",","):"";
+  if(!voti.length){const p=document.createElement("p");p.className="tnone";p.textContent=kid.classe&&/primaria/i.test(kid.classe)?"Alla primaria Nuvola non mostra i voti ai genitori.":"Nessun voto registrato.";sec.appendChild(p)}
+  const perM={};for(const x of voti)(perM[x.materia]||=[]).push(x);
+  for(const m of Object.keys(perM).sort()){
+    const l=perM[m].sort((a,b)=>b.data.localeCompare(a.data));const nn=l.filter(x=>x.valore!=null);
+    const r=document.createElement("div");r.className="vrow";
+    const a=document.createElement("span");a.className="m";a.textContent=m;
+    const b=document.createElement("span");b.className="avg";b.textContent=nn.length?(nn.reduce((s,x)=>s+Number(x.valore),0)/nn.length).toFixed(2).replace(".",","):"";
+    const c=document.createElement("div");c.className="chips";
+    for(const x of l){const ch=document.createElement("span");ch.className="vchip"+(x.valore!=null&&x.valore<6?" low":x.valore!=null&&x.valore>=8?" hi":"")+(x.nuovo?" new":"");ch.textContent=x.voto+" ";const sm=document.createElement("small");sm.textContent=fmtD(x.data);ch.appendChild(sm);if(x.nuovo)ch.title="Nuovo";c.appendChild(ch)}
+    r.append(a,b,c);sec.appendChild(r);
+  }
+  v.appendChild(sec);
+  // Note
+  const ns=document.createElement("section");ns.className="gsec";ns.innerHTML='<h2><span>Note</span><small></small></h2>';
+  ns.querySelector("small").textContent=note.length?note.length+(note.length===1?" nota":" note"):"";
+  if(!note.length){const p=document.createElement("p");p.className="tnone";p.textContent="Nessuna nota.";ns.appendChild(p)}
+  for(const x of note){
+    const r=document.createElement("div");r.className="nrow"+(/disciplin|disturb|comport/i.test(x.tipo)?" disc":"");
+    const a=document.createElement("div");const t=document.createElement("span");t.className="t";t.textContent=x.tipo;a.appendChild(t);
+    if(x.nuovo){const n=document.createElement("span");n.className="newtag";n.textContent="Nuova";a.appendChild(n)}
+    if(x.materia){const mm=document.createElement("div");mm.className="meta";mm.textContent=x.materia;a.appendChild(mm)}
+    const d=document.createElement("span");d.className="d";d.textContent=fmtD(x.data);
+    r.append(a,d);ns.appendChild(r);
+  }
+  v.appendChild(ns);
+  // Notifiche genitori
+  const nb=document.createElement("section");nb.className="gsec";
+  nb.innerHTML='<h2><span>Avvisi voti e note</span><small id="g-nstato"></small></h2><p class="nm" id="g-nmsg" style="margin:0 0 8px;font-size:.85rem;color:var(--muted)">Una notifica generica (es. “Nuovo voto per Enrico”), tra le 8 e le 21. Il voto si vede solo aprendo l’app.</p><button class="tbtn ok" type="button" id="g-nbtn">Attiva avvisi</button>';
+  v.appendChild(nb);
+  nb.querySelector("#g-nbtn").addEventListener("click",gNotifica);
+  gStatoNotifica();
+}
+async function gStatoNotifica(){
+  const b=$("#g-nbtn"),s=$("#g-nstato");if(!b)return;
+  if(!("serviceWorker" in navigator)||!("PushManager" in window)){b.hidden=true;s.textContent="non disponibili";return}
+  const reg=await navigator.serviceWorker.ready;const sub=await reg.pushManager.getSubscription();
+  const st=sub?await rpc("stato_genitore",{codice:G.code,p_endpoint:sub.endpoint}).catch(()=>null):null;
+  const on=!!(st&&st.voti);b.dataset.on=on?"1":"";b.textContent=on?"Disattiva avvisi":"Attiva avvisi";b.className="tbtn"+(on?"":" ok");s.textContent=on?"attivi":"spenti";
+}
+async function gNotifica(){
+  const b=$("#g-nbtn");b.disabled=true;
+  try{
+    const reg=await navigator.serviceWorker.ready;
+    let sub=await reg.pushManager.getSubscription();
+    if(b.dataset.on){await rpc("disiscrivi_genitore",{codice:G.code,p_endpoint:sub.endpoint});}
+    else{
+      if(await Notification.requestPermission()!=="granted"){$("#g-nmsg").textContent="Permesso negato: attivalo dalle impostazioni del telefono.";return}
+      sub=sub||await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64u(VAPID)});
+      await rpc("iscrivi_genitore",{codice:G.code,p_sub:sub.toJSON(),p_voti:true});
+    }
+    await gStatoNotifica();
+  }catch(e){$("#g-nmsg").textContent="Non sono riuscito a salvare. Riprova."}
+  finally{b.disabled=false}
+}
+$("#g-open").addEventListener("click",()=>{window.scrollTo(0,0);gMostra(true)});
+$("#v-gen").addEventListener("click",()=>gMostra(true));
+$("#v-compiti").addEventListener("click",()=>gMostra(false));
+$("#views").hidden=!G.code;
+
 const nState={sub:null};
 function b64u(s){const p="=".repeat((4-s.length%4)%4);const r=atob((s+p).replace(/-/g,"+").replace(/_/g,"/"));return Uint8Array.from(r,c=>c.charCodeAt(0))}
 function nUI(attive,msg){
@@ -470,6 +598,7 @@ $("#n-btn").addEventListener("click",async()=>{
 });
 for(const id of ["#n-ver","#n-com"])$(id).addEventListener("change",()=>{if(nState.sub&&$("#n-stato").textContent==="attive")nSalva().then(()=>$("#n-msg").textContent="Preferenze salvate.").catch(()=>$("#n-msg").textContent="Preferenze non salvate. Riprova.")});
 setTimeout(nInit,500);
+if(location.hash==="#genitori")setTimeout(()=>gMostra(true),0);
 if("serviceWorker" in navigator)window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
 </script>
 

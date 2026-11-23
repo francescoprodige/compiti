@@ -218,6 +218,53 @@ function trovaVerifiche(compiti, argomenti, figlioId, dal, al) {
   return [...out.values()].map(({ programmata, ...v }) => v);
 }
 
+// Voti: righe "MATERIA", poi coppie voto / data ("8½" / "13 nov")
+const MESI3 = { gen: 1, feb: 2, mar: 3, apr: 4, mag: 5, giu: 6, lug: 7, ago: 8, set: 9, ott: 10, nov: 11, dic: 12 };
+function annoScolastico(mese) { const o = oggi(); const inizio = o.getMonth() + 1 >= 9 ? o.getFullYear() : o.getFullYear() - 1; return mese >= 9 ? inizio : inizio + 1; }
+function valoreVoto(v) {
+  const m = v.replace(",", ".").match(/^(\d+(?:\.\d+)?)(½|\+|-|\/(\d+))?$/);
+  if (!m) return null;
+  let n = Number(m[1]);
+  if (m[2] === "½") n += 0.5; else if (m[2] === "+") n += 0.25; else if (m[2] === "-") n -= 0.25; else if (m[3]) n = (n + Number(m[3])) / 2;
+  return n >= 0 && n <= 10 ? Math.round(n * 100) / 100 : null;
+}
+function analizzaVoti(testo, figlioId) {
+  const r = testo.split("\n").map((x) => x.trim()).filter(Boolean);
+  const isData = (x) => /^(\d{1,2}) ([a-z]{3})$/i.test(x || "");
+  const out = []; let materia = null;
+  const start = r.findIndex((x) => /^INTERO ANNO$/i.test(x));
+  for (let i = start + 1; i < r.length; i++) {
+    if (isData(r[i + 1])) {
+      if (!materia) continue;
+      const [, g, m] = r[i + 1].match(/^(\d{1,2}) ([a-z]{3})$/i);
+      const mese = MESI3[m.toLowerCase()]; if (!mese) { i++; continue; }
+      const d = `${annoScolastico(mese)}-${pad(mese)}-${pad(Number(g))}`;
+      out.push({ figlio: figlioId, materia, data: d, voto: r[i], valore: valoreVoto(r[i]) });
+      i++; continue;
+    }
+    if (/^nessun voto$/i.test(r[i]) || /errore|autorizzato/i.test(r[i])) continue;
+    if (r[i] === r[i].toUpperCase() && /[A-Z]{3,}/.test(r[i])) materia = titolo(r[i]);
+  }
+  // id stabile: figlio-materia-data-n (n = ordine tra voti uguali per materia e giorno)
+  const cnt = {};
+  for (const v of out) { const k = `${v.figlio}-${slug(v.materia)}-${v.data.replaceAll("-", "")}`; cnt[k] = (cnt[k] || 0) + 1; v.id = `${k}-${cnt[k]}`; }
+  return out;
+}
+// Note: terne MATERIA / TIPO / gg-mm-aaaa
+function analizzaNote(testo, figlioId) {
+  const r = testo.split("\n").map((x) => x.trim()).filter(Boolean);
+  const out = []; const cnt = {};
+  for (let i = 0; i < r.length; i++) {
+    const m = (r[i] || "").match(/^(\d{2})-(\d{2})-(\d{4})$/);
+    if (!m || i < 2) continue;
+    const data = `${m[3]}-${m[2]}-${m[1]}`;
+    const tipo = titolo(r[i - 1]), materia = titolo(r[i - 2]);
+    const k = `${figlioId}-${data.replaceAll("-", "")}-${slug(materia)}-${slug(tipo)}`; cnt[k] = (cnt[k] || 0) + 1;
+    out.push({ id: `${k}-${cnt[k]}`, figlio: figlioId, materia, tipo, data });
+  }
+  return out;
+}
+
 async function main() {
   if (!NUVOLA_USER || !NUVOLA_PASS || !IMPORT_SECRET) throw new Error("Mancano NUVOLA_USER, NUVOLA_PASS o IMPORT_SECRET");
   const browser = await chromium.launch();
@@ -229,6 +276,8 @@ async function main() {
     const dal = iso(lun);
     const al = iso(addGiorni(lun, WEEKS * 7 - 1));
     const tuttiCompiti = [];
+    const tuttiVoti = [];
+    const tutteNote = [];
     const tutteVerifiche = [];
     for (const f of figli) {
       await scegliFiglio(page, f);
@@ -248,14 +297,17 @@ async function main() {
         await dump(page, `20-${f.id}-argomenti-${w}`);
         argomenti.push(...analizzaArgomenti(await testoPagina(page).catch(() => ""), inizio));
       }
-      if (DEBUG) {
-        for (const [nome, path] of [["voti", "/area-tutore/voti"], ["note", "/area-tutore/note"]]) {
-          await page.goto(`${BASE}${path}`, { waitUntil: "networkidle" }).catch(() => {});
-          await page.waitForTimeout(1000);
-          await dump(page, `30-${f.id}-${nome}`);
-          if (DEBUG) fs.writeFileSync(`debug/30-${f.id}-${nome}.url`, page.url());
-        }
-      }
+      try {
+        await page.goto(`${BASE}/area-tutore/voti`, { waitUntil: "networkidle" });
+        await page.getByText("INTERO ANNO", { exact: true }).first().click({ timeout: 5000 }).catch(() => {});
+        await page.waitForTimeout(1200);
+        await dump(page, `30-${f.id}-voti`);
+        tuttiVoti.push(...analizzaVoti(await testoPagina(page), f.id));
+        await page.goto(`${BASE}/area-tutore/note`, { waitUntil: "networkidle" });
+        await page.waitForTimeout(800);
+        await dump(page, `30-${f.id}-note`);
+        tutteNote.push(...analizzaNote(await testoPagina(page), f.id));
+      } catch (e) { console.warn(`Voti/note di ${f.nome} non letti: ${e.message}`); }
       assegnaId(suoi);
       tuttiCompiti.push(...suoi);
       tutteVerifiche.push(...trovaVerifiche(suoi, argomenti, f.id, iso(oggi()), iso(addGiorni(oggi(), 14))));
@@ -268,6 +320,8 @@ async function main() {
       p_compiti: tuttiCompiti.map(pulisci), p_verifiche: tutteVerifiche,
     });
     await rpc("imposta_figli", { segreto: IMPORT_SECRET, p_figli: figli.map(({ nomeCompleto, ...f }) => f) }).catch((e) => console.warn(e.message));
+    const rv = await rpc("importa_voti", { segreto: IMPORT_SECRET, figli: figli.map((f) => f.id), p_voti: tuttiVoti, p_note: tutteNote });
+    console.log("Voti/note:", tuttiVoti.length, tutteNote.length, rv);
     console.log("Importato:", res, "verifiche trovate:", tutteVerifiche.length);
   } catch (e) {
     console.error(e.message);
